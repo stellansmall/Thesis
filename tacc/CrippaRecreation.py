@@ -3,8 +3,6 @@ import numpy as np
 from qiskit.quantum_info import SparsePauliOp
 from qiskit.circuit.library import n_local
 from qiskit.circuits import ParameterVector
-# qiskit.transpiler.passes.analysis.num_qubits is deprecated/incorrect for circuit properties, but left as-is per source structure
-from qiskit.transpiler.passes.analysis import num_qubits
 import matplotlib.pyplot as plt
 from qiskit.primitives import StatevectorEstimator
 from scipy.optimize import minimize
@@ -14,7 +12,6 @@ import json
 import uuid
 import time
 from datetime import datetime
-import matplotlib.pyplot as plt
 # This is the same as CrippaExperiments but I passed it through Gemini and asked it to optimize the code
 # for HPC simulation. I looked over it and am pretty confident that it didn't break anything but 
 # you can never really trust the LLM and I dont really have version control yet so I'm keeping both at least
@@ -44,7 +41,7 @@ def V_pma(thetas):
     V.append(Heisenberg(thetas[3]), qargs=[0,3])
     return V
 
-def U_pma(layers):
+def U_pma(num_qubits, layers):
     U = QuantumCircuit(num_qubits, name="U_PMA")
     params = ParameterVector("θ", 4 * layers)
 
@@ -198,4 +195,4 @@ def HA(num_spins, backend, estimator_options, layers, coupling_strength, field_s
 
 
 def PMA(num_spins, params, coupling_strength, field_strength):
-     hamiltonian = define_hamiltonian(num_spins=num_spins, coupling_strength=coupling_strength, field_strength=field_strength)
+     hamiltonian = define_heisenberg_loop(num_spins=num_spins, coupling_strength=coupling_strength, field_strength=field_strength)
