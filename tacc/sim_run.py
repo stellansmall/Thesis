@@ -31,6 +31,9 @@ def main():
         print("Error: Please provide a task ID.")
         sys.exit(1)
 
+    # Optional second argument: a batch identifier (e.g. $SLURM_ARRAY_JOB_ID)
+    # used to keep separate sbatch submissions in their own subfolders.
+    batch_id = sys.argv[2] if len(sys.argv) > 2 else None
 
     if task_id >= len(parameter_grid):
         print(f"Task ID {task_id} exceeds parameter grid size ({len(parameter_grid)}).")
@@ -50,7 +53,8 @@ def main():
         estimator_options,
         layers,
         coupling,
-        field
+        field,
+        batch_id
     )
 
     print(f"Task {task_id} complete. Data saved to {db_path} and {plot_path}")

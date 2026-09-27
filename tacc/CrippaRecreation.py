@@ -2,7 +2,7 @@ from qiskit import QuantumCircuit
 import numpy as np
 from qiskit.quantum_info import SparsePauliOp
 from qiskit.circuit.library import n_local
-from qiskit.circuits import ParameterVector
+from qiskit.circuit import ParameterVector
 import matplotlib.pyplot as plt
 from qiskit.primitives import StatevectorEstimator
 from scipy.optimize import minimize
@@ -95,7 +95,7 @@ def cost_func_vqe(params, ansatz, hamiltonian, estimator, iterations_list):
     iterations_list.append(cost)
     return cost
 
-def HA(num_spins, backend, estimator_options, layers, coupling_strength, field_strength):
+def HA(num_spins, backend, estimator_options, layers, coupling_strength, field_strength, batch_id=None):
     # Capture start time for DB entry
     start_time = time.time()
     start_timestamp = datetime.now().isoformat()
@@ -134,8 +134,10 @@ def HA(num_spins, backend, estimator_options, layers, coupling_strength, field_s
 
     # 1. Plotting Energy vs Iterations (Saved to disk for HPC compatibility)
     run_id = str(uuid.uuid4())
+    plots_dir = os.path.join("output_plots", str(batch_id)) if batch_id else "output_plots"
     os.makedirs("output_plots", exist_ok=True)
-    plot_filepath = os.path.join("output_plots", f"HA_energy_plot_{run_id}.png")
+    param_tag = f"N{num_spins}_L{layers}_J{coupling_strength}_B{field_strength}"
+    plot_filepath = os.path.join(plots_dir, f"HA_energy_plot_{param_tag}_{run_id}.png")
 
     plt.figure()
     plt.plot(range(1, len(iterations) + 1), iterations, marker='o', linestyle='-', color='b')
@@ -147,8 +149,9 @@ def HA(num_spins, backend, estimator_options, layers, coupling_strength, field_s
     plt.close() # Close figure to free memory on HPC
 
     # 2. Local NoSQL Database Document Creation
-    os.makedirs("local_nosql_db", exist_ok=True)
-    db_filepath = os.path.join("local_nosql_db", f"{run_id}.json")
+    db_dir = os.path.join("local_nosql_db", str(batch_id)) if batch_id else "local_nosql_db"
+    os.makedirs(db_dir, exist_ok=True)
+    db_filepath = os.path.join(db_dir, f"{run_id}.json")
 
     # Map implemented parameters to the thesis schema
     db_document = {
