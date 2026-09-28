@@ -9,9 +9,9 @@ from CrippaRecreation import *
 def main():
     #non-variational input parameters
     num_spins_list = [4, 6]
-    layers_list = [1, 2, 3]
-    coupling_strengths = [0.5, 1.0, 1.5]
-    field_strengths = [0.1, 0.5, 1.0]
+    layers_list = [2, 3]
+    coupling_strengths = [1.0]
+    field_strengths = [0.25, 0.4, 1, 1.5, 2.4, 3.2, 2.8]
     
     #generate all lists of parameters
     parameter_grid = list(itertools.product(

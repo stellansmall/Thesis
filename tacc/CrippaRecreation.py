@@ -142,6 +142,7 @@ def HA(num_spins, backend, estimator_options, layers, coupling_strength, field_s
     plt.figure()
     plt.plot(range(1, len(iterations) + 1), iterations, marker='o', linestyle='-', color='b')
     plt.xlabel("Iteration")
+    plt.xscale("log")
     plt.ylabel("Energy")
     plt.title(f"Heisenberg VQE Optimization (HA) - {num_spins} Spins")
     plt.grid(True)
@@ -151,7 +152,7 @@ def HA(num_spins, backend, estimator_options, layers, coupling_strength, field_s
     # 2. Local NoSQL Database Document Creation
     db_dir = os.path.join("local_nosql_db", str(batch_id)) if batch_id else "local_nosql_db"
     os.makedirs(db_dir, exist_ok=True)
-    db_filepath = os.path.join(db_dir, f"{run_id}.json")
+    db_filepath = os.path.join(db_dir, f"{param_tag}_{run_id}.json")
 
     # Map implemented parameters to the thesis schema
     db_document = {
