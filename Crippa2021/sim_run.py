@@ -4,7 +4,7 @@ import itertools
 import matplotlib
 matplotlib.use('Agg')
 from qiskit_aer import StatevectorSimulator
-from CrippaRecreation import *
+from ansaetze import *
 
 def main():
     #non-variational input parameters
