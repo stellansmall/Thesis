@@ -204,7 +204,7 @@ def HA(num_spins, backend, estimator_options, layers, coupling_strength, field_s
     return result, iterations, plot_filepath, db_filepath
 
 
-def PMA(backend, estimator_options, layers, coupling_strength, field_strength, batch_id=None):
+def PMA(backend, estimator_options, layers, coupling_strength, field_strength, batch_id=None, initial_guess=None):
     # Capture start time for DB entry
     start_time = time.time()
     start_timestamp = datetime.now().isoformat()
@@ -224,7 +224,10 @@ def PMA(backend, estimator_options, layers, coupling_strength, field_strength, b
         print(f"Iter {len(iterations)}: cost = {iterations[-1]}")
 
     iterations = []
-    x0 = np.ones(ansatz.num_parameters)
+    if initial_guess is not None:
+        x0 = np.array(initial_guess)
+    else:
+        x0 = np.ones(ansatz.num_parameters)
     local_estimator = StatevectorEstimator()
 
 
