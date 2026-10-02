@@ -9,7 +9,7 @@ from ansaetze import *
 def main():
     #non-variational input parameters
     num_spins_list = [4]
-    layers_list = [2]
+    layers_list = [0, 1]
     coupling_strengths = [1.0]
     field_strengths = [0.4, 3.2, 5]
 
