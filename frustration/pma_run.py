@@ -16,7 +16,7 @@ def main():
     layers_list = [1]  # PMA requires only 1 layer due to symmetry adaptation
     coupling_strengths = [1.0]
     field_strengths = [0.25, 0.4, 1.0]
-    spin_orbit_strengths = [0.1]  # DM interaction strength (SOI)
+    spin_orbit_strengths = [-0.1]  # DM interaction strength (SOI)
 
     # Generate parameter grid
     parameter_grid = list(
@@ -62,6 +62,7 @@ def main():
         field_strength=field,
         spin_orbit_strength=spin_orbit,
         batch_id=batch_id,
+        initial_guess=[0.0] * layers
     )
 
     print(f"Task {task_id} complete. Data saved to {db_path} and {plot_path}")
