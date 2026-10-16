@@ -121,9 +121,9 @@ def U_ha(layers, qubits=3):  # I think this might be fine to just port straight
 estimator = StatevectorEstimator()
 
 
-# SOI is Spin-orbit Interaction
+# DM is Spin-orbit Interaction
 def define_heisenberg_loop(num_spins, coupling_strength=1, field_strength=1,
-                           SOI=1):
+                           DM=1):
     # This should function perfectly fine for odd spins
     ham_list = []
     edges = [(i, (i + 1) % num_spins) for i in range(num_spins)]
@@ -143,9 +143,9 @@ def define_heisenberg_loop(num_spins, coupling_strength=1, field_strength=1,
 
     # Spin-Orbit / Dzyaloshinskii-Moriya Term: D_z * (s_i x s_j)_z
     for i, j in edges:
-        # D_z * (s_i^x s_j^y - s_i^y s_j^x) -> (SOI / 4) * (XY - YX)
-        ham_list.append(("XY", [i, j], SOI / 4.0))
-        ham_list.append(("YX", [i, j], -SOI / 4.0))
+        # D_z * (s_i^x s_j^y - s_i^y s_j^x) -> (DM / 4) * (XY - YX)
+        ham_list.append(("XY", [i, j], DM / 4.0))
+        ham_list.append(("YX", [i, j], -DM / 4.0))
 
     hamiltonian = SparsePauliOp.from_sparse_list(
         ham_list, num_qubits=num_spins)
@@ -301,7 +301,7 @@ def HA(
         num_spins=num_spins,
         coupling_strength=coupling_strength,
         field_strength=field_strength,
-        SOI=spin_orbit_strength
+        DM=spin_orbit_strength
     )
     ansatz = QuantumCircuit(num_spins)
     ansatz.compose(U_ha(layers, num_spins), inplace=True)
@@ -333,16 +333,18 @@ def PMA(  # All the PMA Stuff needs to change and this is no exception
     coupling_strength,
     field_strength,
     spin_orbit_strength,
+    target_sz=-0.5,
+    chirality=None,
     batch_id=None,
     initial_guess=None,
 ):
     hamiltonian = define_heisenberg_loop(  # Might need to change this
         num_spins=qubits, coupling_strength=coupling_strength,
-        field_strength=field_strength, SOI=spin_orbit_strength
+        field_strength=field_strength, DM=spin_orbit_strength
     )
     ansatz = QuantumCircuit(qubits)
     ansatz.compose(
-        pma_initial(qubits=qubits),
+        pma_initial(qubits=qubits, target_sz=target_sz, k=chirality),
         inplace=True
     )
     ansatz.compose(U_pma(qubits, layers), inplace=True)
