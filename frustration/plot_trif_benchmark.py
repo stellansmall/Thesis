@@ -33,11 +33,12 @@ for filepath in json_files:
         records.append(json.load(f))
 
 # Define parameter grid ordering matching trif_vqe_benchmark.py
+
 grid_panel1 = [
-    {"field": 0.0, "k": 1, "sz": -0.5, "label": "k=1, Sz=-1/2"},
-    {"field": 0.0, "k": 1, "sz": 0.5, "label": "k=1, Sz=+1/2"},
-    {"field": 0.0, "k": -1, "sz": -0.5, "label": "k=-1, Sz=-1/2"},
-    {"field": 0.0, "k": -1, "sz": 0.5, "label": "k=-1, Sz=+1/2"},
+    {"field": 0.0, "C": 1, "sz": -0.5, "label": "C=1, Sz=-1/2"},
+    {"field": 0.0, "C": 1, "sz": 0.5, "label": "C=1, Sz=+1/2"},
+    {"field": 0.0, "C": -1, "sz": -0.5, "label": "C=-1, Sz=-1/2"},
+    {"field": 0.0, "C": -1, "sz": 0.5, "label": "C=-1, Sz=+1/2"},
 ]
 
 grid_panel2 = [

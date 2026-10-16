@@ -12,21 +12,21 @@ D_z = 1.0 / np.sqrt(3)   # Calibrated DM strength for Δ_SO = 1.0 K
 layers = 1
 initial_guess = [0.0] * layers
 
-# --- Define the 19-Task Parameter Grid ---
+# --- Define 19-Task Parameter Grid using "C" ---
 grid_panel1 = [
-    {"panel": 1, "field": 0.0, "k": 1, "sz": -0.5, "label": "k=1, Sz=-1/2"},
-    {"panel": 1, "field": 0.0, "k": 1, "sz": 0.5, "label": "k=1, Sz=+1/2"},
-    {"panel": 1, "field": 0.0, "k": -1, "sz": -0.5, "label": "k=-1, Sz=-1/2"},
-    {"panel": 1, "field": 0.0, "k": -1, "sz": 0.5, "label": "k=-1, Sz=+1/2"},
+    {"panel": 1, "field": 0.0, "C": 1, "sz": -0.5, "label": "C=1, Sz=-1/2"},
+    {"panel": 1, "field": 0.0, "C": 1, "sz": 0.5, "label": "C=1, Sz=+1/2"},
+    {"panel": 1, "field": 0.0, "C": -1, "sz": -0.5, "label": "C=-1, Sz=-1/2"},
+    {"panel": 1, "field": 0.0, "C": -1, "sz": 0.5, "label": "C=-1, Sz=+1/2"},
 ]
 
 grid_panel2 = [
-    {"panel": 2, "field": b, "k": 1, "sz": -0.5, "label": f"B_code={b:.2f}"}
+    {"panel": 2, "field": b, "C": 1, "sz": -0.5, "label": f"B_code={b:.2f}"}
     for b in [0.25, 0.5, 0.75, 1.0]
 ]
 
 grid_panel3 = [
-    {"panel": 3, "field": b, "k": 1, "sz": -0.5, "label": f"B_tesla={b*0.75:.2f}"}
+    {"panel": 3, "field": b, "C": 1, "sz": -0.5, "label": f"B_tesla={b*0.75:.2f}"}
     for b in np.arange(0.0, 1.05, 0.1)
 ]
 
@@ -52,7 +52,7 @@ def main():
     backend = StatevectorSimulator()
     estimator_options = {}
 
-    # Execute PMA using your updated top-level PMA function
+    # Call PMA with 'chirality' explicitly matching task['C']
     result, iterations, plot_path, db_path = PMA(
         qubits=num_spins,
         backend=backend,
@@ -64,7 +64,7 @@ def main():
         batch_id=batch_id,
         initial_guess=initial_guess,
         target_sz=task["sz"],
-        k=task["k"],
+        chirality=task.get("C", None),  # Pulls "C" key and passes to chirality kwarg
     )
 
     print(f"Task {task_id} complete. Data saved to {db_path}")
