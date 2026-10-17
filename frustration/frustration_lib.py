@@ -171,6 +171,8 @@ def _execute_and_save_vqe(
     ansatz_id,
     batch_id,
     initial_guess=None,
+    set_sz=None,
+    set_chirality=None
 ):
     # Capture start time for DB entry
     start_time = time.time()
@@ -201,7 +203,7 @@ def _execute_and_save_vqe(
     comp_time = end_time - start_time
 
     # 1. Plotting Energy vs Iterations (Saved to disk for HPC compatibility)
-    run_id = str(uuid.uuid4())
+    run_id = str(uuid.uuid4())[:5]
     plots_dir = (
         os.path.join("output_plots", str(batch_id)
                      ) if batch_id else "output_plots"
@@ -248,6 +250,8 @@ def _execute_and_save_vqe(
             "num_spins": num_spins,
             "coupling_strength_J": coupling_strength,
             "spin_orbit_strength_delta": spin_orbit_strength,
+            "Initialized Sz (PMA only)": set_sz,
+            "Initialized Chirality (PMA only)": set_chirality
         },
         "external_parameters": {
             "B_z": field_strength
@@ -366,4 +370,6 @@ def PMA(  # All the PMA Stuff needs to change and this is no exception
         ansatz_id="PMA",
         batch_id=batch_id,
         initial_guess=initial_guess,
+        set_sz=tartget_sz,
+        set_chirality=chirality
     )

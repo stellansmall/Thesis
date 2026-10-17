@@ -68,6 +68,8 @@ for target in grid_panel1:
             r
             for r in records
             if abs(r["external_parameters"]["B_z"] - target["field"]) < 1e-5
+            and r["physical_parameters"].get("Initialized Sz (PMA only)") == target["sz"]
+            and r["physical_parameters"].get("Initialized Chirality (PMA only)") == target["C"]
             # Additional matching metadata if saved in JSON
         ),
         None,
