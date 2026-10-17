@@ -18,7 +18,7 @@ from scipy.optimize import minimize
 def Heisenberg(
     theta,
 ):  # Creates the fundamental building block of the PMA Ansatz, of which each
-    # layer of the ansatz requires several 
+    # layer of the ansatz requires several
     W = QuantumCircuit(2, name="W(θ)")
     W.cx(0, 1)
     W.rx(theta / 2 - np.pi / 2, 0)
@@ -217,7 +217,6 @@ def _execute_and_save_vqe(
         param_tag = f"N{num_spins}_L{layers}_J{coupling_strength}_B{field_strength}_D{spin_orbit_strength}"
         title = f"Frustrated Heisenberg VQE Optimization (PMA) - {num_spins} Spins, {layers} Layers\nB/J = {field_strength/coupling_strength}, D = {spin_orbit_strength}"
 
-
     plot_filepath = os.path.join(
         plots_dir, f"{ansatz_id}_energy_plot_{param_tag}_{run_id}.png"
     )
@@ -370,6 +369,6 @@ def PMA(  # All the PMA Stuff needs to change and this is no exception
         ansatz_id="PMA",
         batch_id=batch_id,
         initial_guess=initial_guess,
-        set_sz=tartget_sz,
+        set_sz=target_sz,
         set_chirality=chirality
     )
