@@ -8,7 +8,7 @@ from frustration_lib import PMA
 # --- Physical Parameters ---
 num_spins = 3
 J_code = 2.5             # J_Trif = 5.0 K -> J_code = 2.5 K
-D_z = 1.0 / np.sqrt(3)   # Calibrated DM strength for Δ_SO = 1.0 K
+D_z = -1.0 / np.sqrt(3)   # Calibrated DM strength for Δ_SO = 1.0 K
 layers = 1
 initial_guess = [0.0] * layers
 

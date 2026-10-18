@@ -16,7 +16,7 @@ from scipy.optimize import minimize
 
 
 def define_heisenberg_loop(
-    num_spins, coupling_strength=1.0, field_strength=1.0, DM=1.0
+    num_spins, coupling_strength=1.0, field_strength=1.0, DM=-1.0
 ):
     """
     Constructs a 1D Heisenberg spin ring Hamiltonian with Zeeman field
