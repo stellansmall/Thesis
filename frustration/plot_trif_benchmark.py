@@ -8,16 +8,15 @@ import numpy as np
 
 from frustration_lib import define_heisenberg_loop
 
-# --- Physical Parameters for Energy Offset ---
+# --- Physical Calibration ---
 num_spins = 3
 J_code = 2.5
 D_z = 1.0 / np.sqrt(3)
 
-# Calculate S=1/2 mean energy at B=0 for Trif et al. alignment
+# Exact S=1/2 baseline mean energy at zero field
 H_op = define_heisenberg_loop(num_spins, J_code, 0.0, D_z)
 E_shift = np.mean(np.linalg.eigvalsh(H_op.to_matrix())[:4])
 
-# --- Retrieve Job ID from Command-Line ---
 job_id = sys.argv[1] if len(sys.argv) > 1 else "trif_bench"
 db_dir = os.path.join("local_nosql_db", job_id)
 json_files = glob.glob(os.path.join(db_dir, "*.json"))
@@ -26,19 +25,17 @@ if not json_files:
     print(f"Error: No JSON records found in {db_dir}")
     sys.exit(1)
 
-# --- Load Records ---
 records = []
 for filepath in json_files:
     with open(filepath, "r") as f:
         records.append(json.load(f))
 
-# Define parameter grid ordering matching trif_vqe_benchmark.py
-
+# Define Grid Alignment
 grid_panel1 = [
-    {"field": 0.0, "C": 1, "sz": -0.5, "label": "C=1, Sz=-1/2"},
-    {"field": 0.0, "C": 1, "sz": 0.5, "label": "C=1, Sz=+1/2"},
-    {"field": 0.0, "C": -1, "sz": -0.5, "label": "C=-1, Sz=-1/2"},
-    {"field": 0.0, "C": -1, "sz": 0.5, "label": "C=-1, Sz=+1/2"},
+    {"field": 0.0, "chirality": 1, "target_sz": -0.5, "label": "C=1, Sz=-1/2"},
+    {"field": 0.0, "chirality": 1, "target_sz": 0.5, "label": "C=1, Sz=+1/2"},
+    {"field": 0.0, "chirality": -1, "target_sz": -0.5, "label": "C=-1, Sz=-1/2"},
+    {"field": 0.0, "chirality": -1, "target_sz": 0.5, "label": "C=-1, Sz=+1/2"},
 ]
 
 grid_panel2 = [
@@ -48,50 +45,47 @@ grid_panel2 = [
 
 grid_panel3_fields = np.arange(0.0, 1.05, 0.1)
 
-# --- Setup Plot ---
 fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 fig.suptitle(
-    f"Trif et al. VQE Benchmark (Cu3 Triangle, J={J_code*2}K, Δ_SO=1K)",
+    f"Trif et al. VQE Benchmark (Cu3 Triangle, J={J_code*2:.1f}K, Δ_SO=1K)",
     fontsize=14,
 )
 
-# Panel 1: Zero-Field Splitting
+# --- Panel 1: Zero-Field Splitting (Unshifted Raw History) ---
 ax1 = axes[0]
 ax1.set_title("Panel 1: Zero-Field Splitting (B=0 T)")
 ax1.set_xlabel("VQE Iteration")
-ax1.set_ylabel("Energy (K)")
+ax1.set_ylabel("Raw Energy (K)")
 
 for target in grid_panel1:
-    # Match JSON record by magnetic field value
     rec = next(
         (
             r
             for r in records
             if abs(r["external_parameters"]["B_z"] - target["field"]) < 1e-5
-            and r["physical_parameters"].get("Initialized Sz (PMA only)") == target["sz"]
-            and r["physical_parameters"].get("Initialized Chirality (PMA only)") == target["C"]
-            # Additional matching metadata if saved in JSON
+            and r["physical_parameters"].get("target_sz") == target["target_sz"]
+            and r["physical_parameters"].get("chirality") == target["chirality"]
         ),
         None,
     )
     if rec:
-        # Note: iterations are read from JSON best_energy if history isn't logged,
-        # or loaded directly from your saved run histories.
-        final_e = rec["results"]["best_energy"] - E_shift
-        ax1.axhline(
-            final_e, linestyle="-", label=f"{target['label']} ({final_e:.2f}K)"
-        )
+        history = rec["results"].get("history", [])
+        final_e = rec["results"]["best_energy"]
+        if history:
+            ax1.plot(history, label=f"{target['label']} ({final_e:.2f}K)")
+        else:
+            ax1.axhline(final_e, label=f"{target['label']} ({final_e:.2f}K)")
 
-ax1.axhline(-0.5, color="k", linestyle="--", alpha=0.5, label="Trif Exact (-0.5 K)")
-ax1.axhline(0.5, color="k", linestyle="--", alpha=0.5, label="Trif Exact (+0.5 K)")
+ax1.axhline(E_shift - 0.5, color="k", linestyle="--", alpha=0.5, label="Exact C=+1 (-0.5 K)")
+ax1.axhline(E_shift + 0.5, color="k", linestyle="--", alpha=0.5, label="Exact C=-1 (+0.5 K)")
 ax1.legend()
 ax1.grid(True, alpha=0.3)
 
-# Panel 2: Low-Field Minimums
+# --- Panel 2: Low-Field Convergence (Shifted History) ---
 ax2 = axes[1]
 ax2.set_title("Panel 2: VQE Convergence (Targeting Ground State)")
 ax2.set_xlabel("VQE Iteration")
-ax2.set_ylabel("Energy (K)")
+ax2.set_ylabel("Shifted Energy (K)")
 
 for target in grid_panel2:
     rec = next(
@@ -103,13 +97,17 @@ for target in grid_panel2:
         None,
     )
     if rec:
+        history = np.array(rec["results"].get("history", [])) - E_shift
         final_e = rec["results"]["best_energy"] - E_shift
-        ax2.axhline(final_e, label=f"{target['label']}: {final_e:.3f} K")
+        if len(history) > 0:
+            ax2.plot(history, label=f"{target['label']}: {final_e:.3f} K")
+        else:
+            ax2.axhline(final_e, label=f"{target['label']}: {final_e:.3f} K")
 
 ax2.legend()
 ax2.grid(True, alpha=0.3)
 
-# Panel 3: Energy vs Magnetic Field
+# --- Panel 3: Ground State Energy vs. Field (Trif Alignment) ---
 ax3 = axes[2]
 ax3.set_title("Panel 3: Ground State Energy vs. Magnetic Field")
 ax3.set_xlabel("B (Tesla)")
@@ -128,7 +126,7 @@ for b_val in grid_panel3_fields:
         None,
     )
     if rec:
-        b_teslas.append(b_val * 0.75)  # Conversion B_tesla = (3/4) * B_code
+        b_teslas.append(b_val * 0.75)  # B_tesla = (3/4) * B_code
         energies.append(rec["results"]["best_energy"] - E_shift)
 
 ax3.plot(
@@ -142,7 +140,7 @@ ax3.plot(
 ax3.legend()
 ax3.grid(True, alpha=0.3)
 
-# --- Save Summary Plot ---
+# Save Plot Output
 output_dir = os.path.join("output_plots", job_id)
 os.makedirs(output_dir, exist_ok=True)
 plot_path = os.path.join(output_dir, "trif_summary_plot.png")

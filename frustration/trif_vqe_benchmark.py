@@ -3,7 +3,7 @@ import sys
 import numpy as np
 from qiskit_aer import StatevectorSimulator
 
-from frustration_lib import define_heisenberg_loop, PMA
+from frustration_lib import PMA
 
 # --- Physical Parameters ---
 num_spins = 3
@@ -12,21 +12,21 @@ D_z = 1.0 / np.sqrt(3)   # Calibrated DM strength for Δ_SO = 1.0 K
 layers = 1
 initial_guess = [0.0] * layers
 
-# --- Define 19-Task Parameter Grid using "C" ---
+# --- Define 19-Task Parameter Grid using "chirality" ---
 grid_panel1 = [
-    {"panel": 1, "field": 0.0, "C": 1, "sz": -0.5, "label": "C=1, Sz=-1/2"},
-    {"panel": 1, "field": 0.0, "C": 1, "sz": 0.5, "label": "C=1, Sz=+1/2"},
-    {"panel": 1, "field": 0.0, "C": -1, "sz": -0.5, "label": "C=-1, Sz=-1/2"},
-    {"panel": 1, "field": 0.0, "C": -1, "sz": 0.5, "label": "C=-1, Sz=+1/2"},
+    {"panel": 1, "field": 0.0, "chirality": 1, "target_sz": -0.5, "label": "C=1, Sz=-1/2"},
+    {"panel": 1, "field": 0.0, "chirality": 1, "target_sz": 0.5, "label": "C=1, Sz=+1/2"},
+    {"panel": 1, "field": 0.0, "chirality": -1, "target_sz": -0.5, "label": "C=-1, Sz=-1/2"},
+    {"panel": 1, "field": 0.0, "chirality": -1, "target_sz": 0.5, "label": "C=-1, Sz=+1/2"},
 ]
 
 grid_panel2 = [
-    {"panel": 2, "field": b, "C": 1, "sz": -0.5, "label": f"B_code={b:.2f}"}
+    {"panel": 2, "field": b, "chirality": 1, "target_sz": -0.5, "label": f"B_code={b:.2f}"}
     for b in [0.25, 0.5, 0.75, 1.0]
 ]
 
 grid_panel3 = [
-    {"panel": 3, "field": b, "C": 1, "sz": -0.5, "label": f"B_tesla={b*0.75:.2f}"}
+    {"panel": 3, "field": b, "chirality": 1, "target_sz": -0.5, "label": f"B_tesla={b*0.75:.2f}"}
     for b in np.arange(0.0, 1.05, 0.1)
 ]
 
@@ -47,14 +47,13 @@ def main():
         sys.exit(0)
 
     task = parameter_grid[task_id]
-    print(f"Running Task {task_id} [Panel {task['panel']}]: {task['label']}")
+    print(f"Executing Task {task_id} [Panel {task['panel']}]: {task['label']}")
 
     backend = StatevectorSimulator()
     estimator_options = {}
 
-    # Call PMA with 'chirality' explicitly matching task['C']
     result, iterations, plot_path, db_path = PMA(
-        qubits=num_spins,
+        num_spins=num_spins,
         backend=backend,
         estimator_options=estimator_options,
         layers=layers,
@@ -63,11 +62,11 @@ def main():
         spin_orbit_strength=D_z,
         batch_id=batch_id,
         initial_guess=initial_guess,
-        target_sz=task["sz"],
-        chirality=task.get("C", None),  # Pulls "C" key and passes to chirality kwarg
+        target_sz=task["target_sz"],
+        chirality=task.get("chirality", None),
     )
 
-    print(f"Task {task_id} complete. Data saved to {db_path}")
+    print(f"Task {task_id} complete. Data written to {db_path}")
 
 
 if __name__ == "__main__":
