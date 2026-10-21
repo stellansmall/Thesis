@@ -122,6 +122,8 @@ for b_val in grid_panel3_fields:
             r
             for r in records
             if abs(r["external_parameters"]["B_z"] - b_val) < 1e-5
+            and r["physical_parameters"].get("chirality") == 1
+            and r["physical_parameters"].get("target_sz") == -0.5
         ),
         None,
     )
