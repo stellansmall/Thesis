@@ -9,8 +9,9 @@ import numpy as np
 from qiskit import QuantumCircuit
 from qiskit.circuit import ParameterVector
 from qiskit.circuit.library import PauliEvolutionGate, n_local
-from qiskit.primitives import StatevectorEstimator
+from qiskit.primitives import BackendEstimatorV2, StatevectorEstimator
 from qiskit.quantum_info import SparsePauliOp, Statevector
+from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from qiskit_aer import StatevectorSimulator
 from scipy.optimize import minimize
 
@@ -84,26 +85,41 @@ def pma_initial(num_spins, target_sz=-0.5, chirality=None):
 
 
 def U_pma(num_spins, layers):
-    """
-    Symmetry-preserving global Hamiltonian Variational Ansatz (HVA).
-    Evolves under the full isotropic ring Hamiltonian to conserve chirality and Sz.
-    """
     qc = QuantumCircuit(num_spins, name="U_PMA")
     params = ParameterVector("θ", layers)
 
-    H_ring = define_heisenberg_loop(
-        num_spins=num_spins,
-        coupling_strength=1.0,
-        field_strength=0.0,
-        DM=0.0,
-    )
-
-    for idx in range(layers):
-        evo_gate = PauliEvolutionGate(H_ring, time=params[idx])
-        qc.append(evo_gate, range(num_spins))
+    for i in range(0, layers):
+        qc.append(Trotter(0, params[i]/2, num_spins))
+        qc.append(Trotter(1, params[i]/2, num_spins))
+        qc.append(Trotter(2, params[i], num_spins))
+        qc.append(Trotter(1, params[i]/2, num_spins))
+        qc.append(Trotter(0, params[i]/2, num_spins))
 
     return qc
 
+def Trotter(init, theta, size):
+    qc = QuantumCircuit(size)
+    if init == 0:
+        qc.append(interaction_term(theta), [size-1, 0])
+    else:
+        for i in range(init, size, 2):
+                qc.append(interaction_term(theta), [i-1, i])
+    return qc
+
+def interaction_term(theta):
+    # This is just crippas W!
+    W = QuantumCircuit(2, name="H")
+    W.cx(0, 1)
+    W.rx(theta / 2 - np.pi / 2, 0)
+    W.h(0)
+    W.rz(theta / 2, 1)
+    W.cx(0, 1)
+    W.h(0)
+    W.rz(-theta / 2, 1)
+    W.cx(0, 1)
+    W.rx(np.pi / 2, 0)
+    W.rx(-np.pi / 2, 1)  # conjugate of rx(pi/2, 1)
+    return W
 
 def U_ha(num_spins, layers):
     """Hardware-Efficient Ansatz (n_local RY + CZ/CX)."""
@@ -135,6 +151,9 @@ def _execute_and_save_vqe(
     spin_orbit_strength,
     ansatz_id,
     batch_id,
+    backend=None,
+    estimator_options=None,
+    optimizer_method="COBYLA",
     initial_guess=None,
     target_sz=None,
     chirality=None,
@@ -142,13 +161,37 @@ def _execute_and_save_vqe(
     start_time = time.time()
     start_timestamp = datetime.now().isoformat()
 
+    estimator_options = estimator_options or {}
+
+    # 1. Determine Primitive Estimator & Transpile Circuit if on Real Backend
+    is_statevector = backend is None or isinstance(
+        backend, StatevectorSimulator
+    )
+
+    if is_statevector:
+        estimator = StatevectorEstimator()
+        target_circuit = ansatz
+        target_hamiltonian = hamiltonian
+        backend_name = "Local StatevectorEstimator"
+        shots_info = "Exact (Statevector)"
+    else:
+        # Transpile for Target Hardware / Backend Architecture
+        pm = generate_preset_pass_manager(optimization_level=2, backend=backend)
+        target_circuit = pm.run(ansatz)
+        target_hamiltonian = hamiltonian.apply_layout(target_circuit.layout)
+
+        estimator = BackendEstimatorV2(
+            backend=backend, options=estimator_options
+        )
+        backend_name = getattr(backend, "name", str(backend))
+        shots_info = estimator_options.get("default_shots", "Hardware Sampled")
+
     iterations = []
     x0 = (
         np.array(initial_guess)
         if initial_guess is not None
         else np.ones(ansatz.num_parameters)
     )
-    estimator = StatevectorEstimator()
 
     def callback(xk):
         print(f"Iter {len(iterations)}: cost = {iterations[-1]:.6f}")
@@ -156,8 +199,8 @@ def _execute_and_save_vqe(
     result = minimize(
         _cost_func_vqe,
         x0,
-        args=(ansatz, hamiltonian, estimator, iterations),
-        method="COBYLA",
+        args=(target_circuit, target_hamiltonian, estimator, iterations),
+        method=optimizer_method,
         options={"maxiter": 5000, "disp": False},
         callback=callback,
     )
@@ -169,7 +212,7 @@ def _execute_and_save_vqe(
     run_id = str(uuid.uuid4())[:8]
     param_tag = f"N{num_spins}_L{layers}_J{coupling_strength:.2f}_B{field_strength:.2f}_D{spin_orbit_strength:.3f}"
 
-    # 1. Output Plot Generation
+    # 2. Output Plot Generation
     plots_dir = (
         os.path.join("output_plots", str(batch_id))
         if batch_id
@@ -191,12 +234,14 @@ def _execute_and_save_vqe(
     plt.xlabel("Iteration")
     plt.xscale("log")
     plt.ylabel("Energy (K)")
-    plt.title(f"VQE Optimization ({ansatz_id}) - N={num_spins}, L={layers}")
+    plt.title(
+        f"VQE Optimization ({ansatz_id}) - N={num_spins}, L={layers}\nBackend: {backend_name}"
+    )
     plt.grid(True, alpha=0.3)
     plt.savefig(plot_filepath)
     plt.close()
 
-    # 2. Document Store Output
+    # 3. Document Store Output
     db_dir = (
         os.path.join("local_nosql_db", str(batch_id))
         if batch_id
@@ -218,13 +263,14 @@ def _execute_and_save_vqe(
         "vqe_configuration": {
             "ansatz_identifier": ansatz_id,
             "ansatz_depth_layers": layers,
-            "optimization_algorithm": "COBYLA",
+            "optimization_algorithm": optimizer_method,
             "max_iterations": 5000,
         },
         "quantum_run_configuration": {
             "num_gates_pre_transpile": dict(ansatz.count_ops()),
-            "shots": "Exact (Statevector)",
-            "backend": "Local StatevectorEstimator",
+            "num_gates_post_transpile": dict(target_circuit.count_ops()),
+            "shots": shots_info,
+            "backend": backend_name,
         },
         "results": {
             "best_energy": float(result.fun),
@@ -246,15 +292,16 @@ def _execute_and_save_vqe(
 
 def PMA(
     num_spins,
-    backend,
-    estimator_options,
-    layers,
-    coupling_strength,
-    field_strength,
-    spin_orbit_strength,
+    backend=None,
+    estimator_options=None,
+    layers=1,
+    coupling_strength=1.0,
+    field_strength=1.0,
+    spin_orbit_strength=-1.0,
     target_sz=-0.5,
     chirality=None,
     batch_id=None,
+    optimizer_method="COBYLA",
     initial_guess=None,
 ):
     hamiltonian = define_heisenberg_loop(
@@ -272,9 +319,6 @@ def PMA(
     )
     ansatz.compose(U_pma(num_spins, layers), inplace=True)
 
-    if not isinstance(backend, StatevectorSimulator):
-        raise NotImplementedError("Only StatevectorSimulator is supported.")
-
     return _execute_and_save_vqe(
         ansatz=ansatz,
         hamiltonian=hamiltonian,
@@ -285,6 +329,9 @@ def PMA(
         spin_orbit_strength=spin_orbit_strength,
         ansatz_id="PMA",
         batch_id=batch_id,
+        backend=backend,
+        estimator_options=estimator_options,
+        optimizer_method=optimizer_method,
         initial_guess=initial_guess,
         target_sz=target_sz,
         chirality=chirality,
@@ -293,13 +340,15 @@ def PMA(
 
 def HA(
     num_spins,
-    backend,
-    estimator_options,
-    layers,
-    coupling_strength,
-    field_strength,
-    spin_orbit_strength,
+    backend=None,
+    estimator_options=None,
+    layers=1,
+    coupling_strength=1.0,
+    field_strength=1.0,
+    spin_orbit_strength=-1.0,
     batch_id=None,
+    optimizer_method="COBYLA",
+    initial_guess=None,
 ):
     hamiltonian = define_heisenberg_loop(
         num_spins=num_spins,
@@ -309,9 +358,6 @@ def HA(
     )
     ansatz = QuantumCircuit(num_spins)
     ansatz.compose(U_ha(num_spins, layers), inplace=True)
-
-    if not isinstance(backend, StatevectorSimulator):
-        raise NotImplementedError("Only StatevectorSimulator is supported.")
 
     return _execute_and_save_vqe(
         ansatz=ansatz,
@@ -323,4 +369,8 @@ def HA(
         spin_orbit_strength=spin_orbit_strength,
         ansatz_id="HA",
         batch_id=batch_id,
+        backend=backend,
+        estimator_options=estimator_options,
+        optimizer_method=optimizer_method,
+        initial_guess=initial_guess,
     )
