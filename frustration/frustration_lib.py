@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import time
 import uuid
@@ -8,23 +9,43 @@ import matplotlib.pyplot as plt
 import numpy as np
 from qiskit import QuantumCircuit
 from qiskit.circuit import ParameterVector
-from qiskit.circuit.library import PauliEvolutionGate, n_local
+from qiskit.circuit.library import n_local
 from qiskit.primitives import BackendEstimatorV2, StatevectorEstimator
-from qiskit.quantum_info import SparsePauliOp, Statevector
+from qiskit.quantum_info import SparsePauliOp
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from qiskit_aer import StatevectorSimulator
 from scipy.optimize import minimize
 
 
+def fold(total_spins: int) -> dict[int, int]:
+    """
+    Maps logical ring indices to a 1D physical line by interleaving
+    the front and back of the chain. Returns a dictionary mapping {logical_idx:
+    physical_idx}.
+    """
+    if total_spins <= 0:
+        raise ValueError(f"Invalid total_spins: {total_spins}")
+
+    fold_dict = {}
+    for i in range(total_spins):
+        if i < total_spins / 2:
+            fold_dict[i] = 2 * i
+        else:
+            fold_dict[i] = 2 * (total_spins - 1 - i) + 1
+
+    return fold_dict
+
+
 def define_heisenberg_loop(
-    num_spins, coupling_strength=1.0, field_strength=1.0, DM=-1.0
+    num_spins, coupling_strength=1.0, field_strength=1.0, DM=-1.0, is_pma=False
 ):
     """
     Constructs a 1D Heisenberg spin ring Hamiltonian with Zeeman field
     and Dzyaloshinskii-Moriya (DM) spin-orbit interaction.
     """
+    fmap = fold(num_spins)
     ham_list = []
-    edges = [(i, (i + 1) % num_spins) for i in range(num_spins)]
+    edges = [(fmap[i], fmap[(i + 1) % num_spins]) for i in range(num_spins)]
 
     # Heisenberg Exchange: J * (Sx Sx + Sy Sy + Sz Sz)
     for i, j in edges:
@@ -34,53 +55,72 @@ def define_heisenberg_loop(
 
     # Zeeman Term: B * Sz
     for i in range(num_spins):
-        ham_list.append(("Z", [i], field_strength / 2.0))
+        ham_list.append(("Z", [fmap[i]], field_strength / 2.0))
 
     # Dzyaloshinskii-Moriya (DM) Spin-Orbit Term: D_z * (Sx Sy - Sy Sx)
     for i, j in edges:
         ham_list.append(("XY", [i, j], DM / 4.0))
         ham_list.append(("YX", [i, j], -DM / 4.0))
+    num_qubits = 2 * num_spins if is_pma else num_spins
 
-    return SparsePauliOp.from_sparse_list(ham_list, num_qubits=num_spins)
+    return SparsePauliOp.from_sparse_list(ham_list, num_qubits=num_qubits)
 
 
-def pma_initial(num_spins, target_sz=-0.5, chirality=None):
-    """
-    Prepares a symmetry-adapted initial Statevector for a 1D spin ring
-    projected into total Sz and chirality (momentum) sectors.
-    """
+def pma_initial(num_spins, chirality=None):
+
+    if num_spins % 2 == 0:
+        raise ValueError("num_spins must be an odd number.")
+
+    a = int((num_spins - 1) // 2)
+    # used for both total up and
+    # chirality momentum number calculations
+    # locked into a low-B regime with this but can be changed
+
     if chirality is None:
-        chirality = (num_spins - 1) // 2
+        chirality = a * math.ceil(num_spins / 2) % num_spins
+        # chirality should never really be none at this point since it's
+        # defined in PMA but might as well be sure.
 
-    num_down = int(num_spins / 2 - target_sz)
-    if (
-        num_down < 0
-        or num_down > num_spins
-        or not float(num_spins / 2 - target_sz).is_integer()
-    ):
-        raise ValueError(
-            f"Target Sz={target_sz} is invalid for {num_spins} spins."
-        )
+    qc = QuantumCircuit(2 * num_spins, name="PMA_Init")
+    fmap = fold(num_spins)
 
-    base_state = [1] * num_down + [0] * (num_spins - num_down)
-    vector = np.zeros(2**num_spins, dtype=complex)
+    anc = list(range(num_spins, 2 * num_spins))
+    tgt = [fmap[i] for i in range(num_spins)]
 
+    # 1. Inject the single spin flip (Base State)
+    qc.x(anc[0])
+
+    # 2. Amplitude Distribution Network (Cascading Beam Splitters)
+    for i in range(num_spins - 1):
+        # Calculate the probability that needs to remain on the current qubit
+        theta = 2 * np.arccos(1 / np.sqrt(num_spins - i))
+
+        # CRY -> CX block to split amplitude to the next spin
+        qc.cry(theta, anc[i], anc[i + 1])
+        qc.cx(anc[i + 1], anc[i])
+
+    qc.barrier()
+
+    # 3. Momentum Phase Network
     for m in range(num_spins):
-        shifted_state = np.roll(base_state, m)
-        bitstring = "".join(map(str, shifted_state))
-        state_idx = int(bitstring, 2)
-        phase = np.exp(2j * np.pi * chirality * m / num_spins)
-        vector[state_idx] += phase
+        phase = -2 * m * np.pi * chirality / num_spins
+        qc.p(phase, anc[m])
 
-    norm = np.linalg.norm(vector)
-    if norm < 1e-10:
-        raise ValueError(
-            "Projection yielded a null state for this symmetry sector."
-        )
-    vector = vector / norm
+    for m in range(a):
+        for j in range(num_spins):
+            target_idx = tgt[(j + m) % num_spins]
+            qc.cx(anc[j], target_idx)
 
-    qc = QuantumCircuit(num_spins)
-    qc.prepare_state(Statevector(vector))
+    qc.barrier()
+
+    for j in range(num_spins):
+        prev_target_idx = tgt[(j - 1) % num_spins]
+        curr_target_idx = tgt[j]
+
+        qc.x(prev_target_idx)
+        qc.ccx(prev_target_idx, curr_target_idx, anc[j])
+        qc.x(prev_target_idx)
+
     return qc
 
 
@@ -88,23 +128,27 @@ def U_pma(num_spins, layers):
     qc = QuantumCircuit(num_spins, name="U_PMA")
     params = ParameterVector("θ", layers)
 
-    for i in range(0, layers):
-        qc.append(Trotter(0, params[i]/2, num_spins))
-        qc.append(Trotter(1, params[i]/2, num_spins))
-        qc.append(Trotter(2, params[i], num_spins))
-        qc.append(Trotter(1, params[i]/2, num_spins))
-        qc.append(Trotter(0, params[i]/2, num_spins))
+    for i in range(0, layers):  # The order here can and maybe should be
+        # changed
+        qc.append(Trotter(0, params[i] / 2, num_spins), range(num_spins))
+        qc.append(Trotter(1, params[i] / 2, num_spins), range(num_spins))
+        qc.append(Trotter(2, params[i], num_spins), range(num_spins))
+        qc.append(Trotter(1, params[i] / 2, num_spins), range(num_spins))
+        qc.append(Trotter(0, params[i] / 2, num_spins), range(num_spins))
 
     return qc
+
 
 def Trotter(init, theta, size):
-    qc = QuantumCircuit(size)
+    qc = QuantumCircuit(size, name=f"Trotter_{init}")
+    fmap = fold(size)
     if init == 0:
-        qc.append(interaction_term(theta), [size-1, 0])
+        qc.append(interaction_term(theta), [fmap[size - 1], fmap[0]])
     else:
         for i in range(init, size, 2):
-                qc.append(interaction_term(theta), [i-1, i])
+            qc.append(interaction_term(theta), [fmap[i - 1], fmap[i]])
     return qc
+
 
 def interaction_term(theta):
     # This is just crippas W!
@@ -121,8 +165,9 @@ def interaction_term(theta):
     W.rx(-np.pi / 2, 1)  # conjugate of rx(pi/2, 1)
     return W
 
+
 def U_ha(num_spins, layers):
-    """Hardware-Efficient Ansatz (n_local RY + CZ/CX)."""
+    """Heuristic Ansatz."""
     return n_local(
         num_qubits=num_spins,
         rotation_blocks="ry",
@@ -155,7 +200,6 @@ def _execute_and_save_vqe(
     estimator_options=None,
     optimizer_method="COBYLA",
     initial_guess=None,
-    target_sz=None,
     chirality=None,
 ):
     start_time = time.time()
@@ -165,8 +209,7 @@ def _execute_and_save_vqe(
 
     # 1. Determine Primitive Estimator & Transpile Circuit if on Real Backend
     is_statevector = backend is None or isinstance(
-        backend, StatevectorSimulator
-    )
+        backend, StatevectorSimulator)
 
     if is_statevector:
         estimator = StatevectorEstimator()
@@ -176,13 +219,13 @@ def _execute_and_save_vqe(
         shots_info = "Exact (Statevector)"
     else:
         # Transpile for Target Hardware / Backend Architecture
-        pm = generate_preset_pass_manager(optimization_level=2, backend=backend)
+        pm = generate_preset_pass_manager(
+            optimization_level=2, backend=backend)
         target_circuit = pm.run(ansatz)
         target_hamiltonian = hamiltonian.apply_layout(target_circuit.layout)
 
         estimator = BackendEstimatorV2(
-            backend=backend, options=estimator_options
-        )
+            backend=backend, options=estimator_options)
         backend_name = getattr(backend, "name", str(backend))
         shots_info = estimator_options.get("default_shots", "Hardware Sampled")
 
@@ -214,9 +257,8 @@ def _execute_and_save_vqe(
 
     # 2. Output Plot Generation
     plots_dir = (
-        os.path.join("output_plots", str(batch_id))
-        if batch_id
-        else "output_plots"
+        os.path.join("output_plots", str(batch_id)
+                     ) if batch_id else "output_plots"
     )
     os.makedirs(plots_dir, exist_ok=True)
     plot_filepath = os.path.join(
@@ -243,9 +285,8 @@ def _execute_and_save_vqe(
 
     # 3. Document Store Output
     db_dir = (
-        os.path.join("local_nosql_db", str(batch_id))
-        if batch_id
-        else "local_nosql_db"
+        os.path.join("local_nosql_db", str(batch_id)
+                     ) if batch_id else "local_nosql_db"
     )
     os.makedirs(db_dir, exist_ok=True)
     db_filepath = os.path.join(db_dir, f"{param_tag}_{run_id}.json")
@@ -256,7 +297,7 @@ def _execute_and_save_vqe(
             "num_spins": num_spins,
             "coupling_strength_J": coupling_strength,
             "spin_orbit_strength_D": spin_orbit_strength,
-            "target_sz": target_sz,
+            "target_sz": -0.5 if ansatz_id == "PMA" else "none (Heuristic)",
             "chirality": chirality,
         },
         "external_parameters": {"B_z": field_strength},
@@ -298,26 +339,28 @@ def PMA(
     coupling_strength=1.0,
     field_strength=1.0,
     spin_orbit_strength=-1.0,
-    target_sz=-0.5,
     chirality=None,
     batch_id=None,
     optimizer_method="COBYLA",
     initial_guess=None,
 ):
+    if chirality is None:
+        chirality = int((0.5 * (num_spins - 1) *
+                     math.ceil(num_spins / 2))) % num_spins
+
     hamiltonian = define_heisenberg_loop(
         num_spins=num_spins,
         coupling_strength=coupling_strength,
         field_strength=field_strength,
         DM=spin_orbit_strength,
+        is_pma=True,
     )
-    ansatz = QuantumCircuit(num_spins)
+    ansatz = QuantumCircuit(2 * num_spins)
     ansatz.compose(
-        pma_initial(
-            num_spins=num_spins, target_sz=target_sz, chirality=chirality
-        ),
+        pma_initial(num_spins=num_spins, chirality=chirality),
         inplace=True,
     )
-    ansatz.compose(U_pma(num_spins, layers), inplace=True)
+    ansatz.compose(U_pma(num_spins, layers), qubits=range(num_spins), inplace=True)
 
     return _execute_and_save_vqe(
         ansatz=ansatz,
@@ -333,7 +376,6 @@ def PMA(
         estimator_options=estimator_options,
         optimizer_method=optimizer_method,
         initial_guess=initial_guess,
-        target_sz=target_sz,
         chirality=chirality,
     )
 
@@ -355,6 +397,7 @@ def HA(
         coupling_strength=coupling_strength,
         field_strength=field_strength,
         DM=spin_orbit_strength,
+        is_pma=False,
     )
     ansatz = QuantumCircuit(num_spins)
     ansatz.compose(U_ha(num_spins, layers), inplace=True)
