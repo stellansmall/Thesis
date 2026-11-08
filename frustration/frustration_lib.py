@@ -125,41 +125,57 @@ def pma_initial(num_spins, chirality=None):
 
 
 def U_pma(num_spins, layers):
+    """
+    Each layer carries three variational angles (theta_x, theta_y, theta_z),
+    shared by every bond in that layer, so the circuit has 3 * layers
+    parameters. Ordering is layer-major:
+    [θx_0, θy_0, θz_0, θx_1, θy_1, θz_1, ...].
+    """
     qc = QuantumCircuit(num_spins, name="U_PMA")
-    params = ParameterVector("θ", layers)
+    params = ParameterVector("θ", 3 * layers)
 
     for i in range(0, layers):  # The order here can and maybe should be
         # changed
-        qc.append(Trotter(0, params[i] / 2, num_spins), range(num_spins))
-        qc.append(Trotter(1, params[i] / 2, num_spins), range(num_spins))
-        qc.append(Trotter(2, params[i], num_spins), range(num_spins))
-        qc.append(Trotter(1, params[i] / 2, num_spins), range(num_spins))
-        qc.append(Trotter(0, params[i] / 2, num_spins), range(num_spins))
+        theta = params[3 * i : 3 * i + 3]  # (θx, θy, θz) for this layer
+        half = [t / 2 for t in theta]
+        qc.append(Trotter(0, half, num_spins), range(num_spins))
+        qc.append(Trotter(1, half, num_spins), range(num_spins))
+        qc.append(Trotter(2, theta, num_spins), range(num_spins))
+        qc.append(Trotter(1, half, num_spins), range(num_spins))
+        qc.append(Trotter(0, half, num_spins), range(num_spins))
 
     return qc
 
 
-def Trotter(init, theta, size):
+def Trotter(init, thetas, size):
+    """thetas = (theta_x, theta_y, theta_z) applied to every bond in this sub-layer."""
     qc = QuantumCircuit(size, name=f"Trotter_{init}")
     fmap = fold(size)
     if init == 0:
-        qc.append(interaction_term(theta), [fmap[size - 1], fmap[0]])
+        qc.append(interaction_term(*thetas), [fmap[size - 1], fmap[0]])
     else:
         for i in range(init, size, 2):
-            qc.append(interaction_term(theta), [fmap[i - 1], fmap[i]])
+            qc.append(interaction_term(*thetas), [fmap[i - 1], fmap[i]])
     return qc
 
 
-def interaction_term(theta):
-    # This is just crippas W!
+def interaction_term(theta_x, theta_y, theta_z):
+    """
+    exp[-i (θx XX + θy YY + θz ZZ)] on two qubits, up to a global phase.
+
+    This is Crippa's W with theta -> 4*theta on each axis, so the angles are
+    the coefficients of the Pauli terms in the exponent. The XX, YY, ZZ terms
+    commute, so this is exact for a single bond.
+    """
+    tx, ty, tz = 4 * theta_x, 4 * theta_y, 4 * theta_z
     W = QuantumCircuit(2, name="H")
     W.cx(0, 1)
-    W.rx(theta / 2 - np.pi / 2, 0)
+    W.rx(tx / 2 - np.pi / 2, 0)
     W.h(0)
-    W.rz(theta / 2, 1)
+    W.rz(tz / 2, 1)
     W.cx(0, 1)
     W.h(0)
-    W.rz(-theta / 2, 1)
+    W.rz(-ty / 2, 1)
     W.cx(0, 1)
     W.rx(np.pi / 2, 0)
     W.rx(-np.pi / 2, 1)  # conjugate of rx(pi/2, 1)
@@ -347,6 +363,12 @@ def PMA(
     if chirality is None:
         chirality = int((0.5 * (num_spins - 1) *
                      math.ceil(num_spins / 2))) % num_spins
+
+    if initial_guess is not None and len(initial_guess) != 3 * layers:
+        raise ValueError(
+            f"initial_guess needs 3 * layers = {3 * layers} entries "
+            f"([θx, θy, θz] per layer), got {len(initial_guess)}."
+        )
 
     hamiltonian = define_heisenberg_loop(
         num_spins=num_spins,
