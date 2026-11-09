@@ -5,3 +5,4 @@ output_plots/
 submit_ha.sh
 submit_pma.sh
 __pycache__/
+.DS_Store
