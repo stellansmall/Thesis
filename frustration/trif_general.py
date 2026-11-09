@@ -10,14 +10,12 @@ num_spins = 3
 J_code = 2.5             # J_Trif = 5.0 K -> J_code = 2.5 K
 D_z = -1.0 / np.sqrt(3)   # Calibrated DM strength for Δ_SO = 1.0 K
 layers = 1
-# 3 angles (θx, θy, θz) per layer. Do NOT start at exactly zero: at θ=0 the
-# initial state is an eigenstate and the energy is flat along each single axis,
-# so COBYLA's axis-aligned starting simplex sees no gradient and stops
-# immediately. 0.25 per angle is the isotropic point equivalent to the old θ=1.
-initial_guess = [0.25] * (3 * layers)
+# 3 angles (θx, θy, θz) per layer. 
+initial_guess = [0] * (3 * layers)
 
 # --- Define 19-Task Parameter Grid using "chirality" ---
-grid_panel1 = [
+grid_panel1 = [ # +Sz states are holdover from old version that handled them
+                # no longer used in current version and slurm file ignores them
     {"panel": 1, "field": 0.0, "chirality": 1, "target_sz": -0.5, "label": "C=1, Sz=-1/2"},
     {"panel": 1, "field": 0.0, "chirality": 1, "target_sz": 0.5, "label": "C=1, Sz=+1/2"},
     {"panel": 1, "field": 0.0, "chirality": -1, "target_sz": -0.5, "label": "C=-1, Sz=-1/2"},

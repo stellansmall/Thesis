@@ -103,7 +103,7 @@ def pma_initial(num_spins, chirality=None):
 
     # 3. Momentum Phase Network
     for m in range(num_spins):
-        phase = -2 * m * np.pi * chirality / num_spins
+        phase = 2 * m * np.pi * chirality / num_spins
         qc.p(phase, anc[m])
 
     for m in range(a):
