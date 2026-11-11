@@ -55,7 +55,7 @@ def define_heisenberg_loop(
 
     # Zeeman Term: B * Sz
     for i in range(num_spins):
-        ham_list.append(("Z", [fmap[i]], field_strength / 2.0))
+        ham_list.append(("Z", [fmap[i]], -field_strength / 2.0))
 
     # Dzyaloshinskii-Moriya (DM) Spin-Orbit Term: D_z * (Sx Sy - Sy Sx)
     for i, j in edges:
