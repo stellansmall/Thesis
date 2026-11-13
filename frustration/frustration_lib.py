@@ -42,6 +42,8 @@ def define_heisenberg_loop(
     """
     Constructs a 1D Heisenberg spin ring Hamiltonian with Zeeman field
     and Dzyaloshinskii-Moriya (DM) spin-orbit interaction.
+    convention from Trif for J
+    but Trif uses Sxyz so need factor of 1/4 for XYZ
     """
     fmap = fold(num_spins)
     ham_list = []
@@ -49,9 +51,9 @@ def define_heisenberg_loop(
 
     # Heisenberg Exchange: J * (Sx Sx + Sy Sy + Sz Sz)
     for i, j in edges:
-        ham_list.append(("ZZ", [i, j], coupling_strength / 2.0))
-        ham_list.append(("YY", [i, j], coupling_strength / 2.0))
-        ham_list.append(("XX", [i, j], coupling_strength / 2.0))
+        ham_list.append(("ZZ", [i, j], coupling_strength/4))
+        ham_list.append(("YY", [i, j], coupling_strength/4))
+        ham_list.append(("XX", [i, j], coupling_strength/4))
 
     # Zeeman Term: B * Sz
     for i in range(num_spins):

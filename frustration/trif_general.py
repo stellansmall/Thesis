@@ -7,7 +7,7 @@ from frustration_lib import PMA
 
 # --- Physical Parameters ---
 num_spins = 3
-J_code = 2.5             # J_Trif = 5.0 K -> J_code = 2.5 K
+J_code = 5  #using convention from Trif 
 D_z = -1.0 / np.sqrt(3)   # Calibrated DM strength for Δ_SO = 1.0 K
 layers = 1
 # 3 angles (θx, θy, θz) per layer. 

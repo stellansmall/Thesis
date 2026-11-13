@@ -56,6 +56,7 @@ ax1 = axes[0]
 ax1.set_title("Panel 1: Zero-Field Splitting (B=0 T)")
 ax1.set_xlabel("VQE Iteration")
 ax1.set_ylabel("Raw Energy (K)")
+ax1.set_yscale('log')
 
 for target in grid_panel1:
     rec = next(
@@ -86,6 +87,7 @@ ax2 = axes[1]
 ax2.set_title("Panel 2: VQE Convergence (Targeting Ground State)")
 ax2.set_xlabel("VQE Iteration")
 ax2.set_ylabel("Shifted Energy (K)")
+ax2.set_yscale('log')
 
 for target in grid_panel2:
     rec = next(
