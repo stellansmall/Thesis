@@ -2,7 +2,7 @@ using XDiag
 using LinearAlgebra
 
 function main(B_T::Real = 0.0)
-    N = 3
+    N = 5
     J_K  = 5.0            # Trif's J
     D_K  = -1 / sqrt(3)   # same number as your benchmark's |DM|
     gfac = 4 / 3          # K/T, same factor as B_code = (4/3) B_T

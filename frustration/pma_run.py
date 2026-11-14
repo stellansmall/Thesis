@@ -54,7 +54,7 @@ def main():
 
     # Execute PMA function
     result, iterations, plot_path, db_path = PMA(
-        qubits=num_spins,
+        num_spins=num_spins,
         backend=backend,
         estimator_options=estimator_options,
         layers=layers,
@@ -62,7 +62,7 @@ def main():
         field_strength=field,
         spin_orbit_strength=spin_orbit,
         batch_id=batch_id,
-        initial_guess=[0.0] * layers
+        initial_guess=[0.0] * 3 * layers
     )
 
     print(f"Task {task_id} complete. Data saved to {db_path} and {plot_path}")
