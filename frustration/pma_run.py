@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 import itertools
 import sys
-
+import math
 import matplotlib
 from qiskit_aer import StatevectorSimulator
 
@@ -12,11 +12,11 @@ matplotlib.use("Agg")
 
 def main():
     # Non-variational input parameters for ODD spins
-    num_spins_list = [3, 5]
+    num_spins_list = [5]
     layers_list = [1]  # PMA requires only 1 layer due to symmetry adaptation
-    coupling_strengths = [1.0]
-    field_strengths = [0.25, 0.4, 1.0]
-    spin_orbit_strengths = [-0.1]  # DM interaction strength (SOI)
+    coupling_strengths = [5.0]
+    field_strengths = [0.0, 0.25, 0.5] # IN KELVIN
+    spin_orbit_strengths = [-1.0/math.sqrt(3)]  # DM interaction strength (SOI)
 
     # Generate parameter grid
     parameter_grid = list(

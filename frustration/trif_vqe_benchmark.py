@@ -7,13 +7,15 @@ from frustration_lib import PMA
 
 # --- Physical Parameters ---
 num_spins = 3
-J_code = 2.5             # J_Trif = 5.0 K -> J_code = 2.5 K
+J_code = 5  #using convention from Trif 
 D_z = -1.0 / np.sqrt(3)   # Calibrated DM strength for Δ_SO = 1.0 K
 layers = 1
-initial_guess = [0.0] * layers
+# 3 angles (θx, θy, θz) per layer. 
+initial_guess = [0] * (3 * layers)
 
 # --- Define 19-Task Parameter Grid using "chirality" ---
-grid_panel1 = [
+grid_panel1 = [ # +Sz states are holdover from old version that handled them
+                # no longer used in current version and slurm file ignores them
     {"panel": 1, "field": 0.0, "chirality": 1, "target_sz": -0.5, "label": "C=1, Sz=-1/2"},
     {"panel": 1, "field": 0.0, "chirality": 1, "target_sz": 0.5, "label": "C=1, Sz=+1/2"},
     {"panel": 1, "field": 0.0, "chirality": -1, "target_sz": -0.5, "label": "C=-1, Sz=-1/2"},
@@ -49,6 +51,13 @@ def main():
     task = parameter_grid[task_id]
     print(f"Executing Task {task_id} [Panel {task['panel']}]: {task['label']}")
 
+    # frustration_lib.PMA currently only builds the Sz = -1/2 state and has no
+    # target_sz argument, so refuse rather than silently run the wrong sector.
+    if task["target_sz"] != -0.5:
+        print(f"Task {task_id}: target_sz={task['target_sz']} is not supported by "
+              "frustration_lib.PMA yet; skipping.")
+        sys.exit(2)
+
     backend = StatevectorSimulator()
     estimator_options = {}
 
@@ -62,7 +71,6 @@ def main():
         spin_orbit_strength=D_z,
         batch_id=batch_id,
         initial_guess=initial_guess,
-        target_sz=task["target_sz"],
         chirality=task.get("chirality", None),
     )
 
