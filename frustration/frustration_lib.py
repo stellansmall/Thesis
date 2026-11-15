@@ -79,7 +79,7 @@ def pma_initial(num_spins, chirality=None):
     # locked into a low-B regime with this but can be changed
 
     if chirality is None:
-        chirality = a * math.ceil(num_spins / 2) % num_spins
+        chirality = -1 * a * math.ceil(num_spins / 2) % num_spins
         # chirality should never really be none at this point since it's
         # defined in PMA but might as well be sure.
 
