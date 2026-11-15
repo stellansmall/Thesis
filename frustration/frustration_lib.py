@@ -188,9 +188,9 @@ def U_ha(num_spins, layers):
     """Heuristic Ansatz."""
     return n_local(
         num_qubits=num_spins,
-        rotation_blocks="ry",
+        rotation_blocks=["ry", "rz"],
         entanglement_blocks="cx",
-        entanglement="linear",
+        entanglement="circular",
         reps=layers,
         insert_barriers=True,
         skip_final_rotation_layer=False,
