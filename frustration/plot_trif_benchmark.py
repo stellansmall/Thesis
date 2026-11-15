@@ -10,7 +10,7 @@ from frustration_lib import define_heisenberg_loop
 
 # --- Physical Calibration ---
 num_spins = 3
-J_code = 2.5
+J_code = 5.0
 D_z = 1.0 / np.sqrt(3)
 
 # Exact S=1/2 baseline mean energy at zero field
