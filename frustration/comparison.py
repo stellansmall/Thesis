@@ -13,10 +13,10 @@ matplotlib.use("Agg")
 
 
 def main():
+    # Base physical parameters from pma_run.py
     coupling = 5.0
     spin_orbit = -1.0 / math.sqrt(3)
 
-    # Task 0 -> Graph 1 (3 spins); Task 1 -> Graph 2 (5 spins)
     configs = [
         (3, [0.0, 0.25]),
         (5, [0.0, 0.25, 0.5]),
@@ -30,63 +30,80 @@ def main():
 
     batch_id = sys.argv[2] if len(sys.argv) > 2 else None
 
-    if task_id >= len(configs):
-        print(f"Task ID {task_id} exceeds config list size ({len(configs)}).")
+    if task_id != 0:
+        print(f"Task ID {task_id} skipped (all runs execute in task 0).")
         sys.exit(0)
 
-    num_spins, field_strengths = configs[task_id]
     backend = StatevectorSimulator()
-    pma_energies = []
-    ha_energies = []
-
-    for run_idx, field in enumerate(field_strengths, start=1):
-        print(f"Task {task_id} | Run {run_idx}: N={num_spins}, Bz={field} K")
-
-        pma_res, _, _, _ = PMA(
-            num_spins=num_spins,
-            backend=backend,
-            estimator_options={},
-            layers=1,
-            coupling_strength=coupling,
-            field_strength=field,
-            spin_orbit_strength=spin_orbit,
-            batch_id=batch_id,
-            initial_guess=[0.0] * 3,
-        )
-        ha_res, _, _, _ = HA(
-            num_spins=num_spins,
-            backend=backend,
-            estimator_options={},
-            layers=3,
-            coupling_strength=coupling,
-            field_strength=field,
-            spin_orbit_strength=spin_orbit,
-            batch_id=batch_id,
-        )
-
-        pma_energies.append(float(pma_res.fun))
-        ha_energies.append(float(ha_res.fun))
-
-    runs = list(range(1, len(field_strengths) + 1))
+    estimator_options = {}
     plots_dir = os.path.join("output_plots", str(batch_id)) if batch_id else "output_plots"
     os.makedirs(plots_dir, exist_ok=True)
-    plot_path = os.path.join(plots_dir, f"comparison_N{num_spins}_PMA_vs_HA.png")
 
-    plt.figure()
-    plt.plot(runs, pma_energies, marker="o", label="PMA")
-    plt.plot(runs, ha_energies, marker="s", label="HA")
-    plt.xticks(runs, [f"{r} ($B_z={b}$ K)" for r, b in zip(runs, field_strengths)])
-    plt.xlabel("Run #")
-    plt.xscale("log")
-    plt.ylabel("Energy (K)")
-    plt.title(f"PMA vs. HA Energy ({num_spins} Spins, J={coupling} K, D={spin_orbit:.3f} K)")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(plot_path)
-    plt.close()
+    colors = ["tab:blue", "tab:orange", "tab:green"]
 
-    print(f"Task {task_id} complete. Graph saved to {plot_path}")
+    for num_spins, field_strengths in configs:
+        plt.figure(figsize=(9, 5.5))
+
+        for color, field in zip(colors, field_strengths):
+            print(
+                f"Running PMA (L=1) & HA (L=3): Spins={num_spins}, "
+                f"J={coupling}, Bz={field}, D_z={spin_orbit}"
+            )
+
+            _, pma_iters, _, _ = PMA(
+                num_spins=num_spins,
+                backend=backend,
+                estimator_options=estimator_options,
+                layers=1,
+                coupling_strength=coupling,
+                field_strength=field,
+                spin_orbit_strength=spin_orbit,
+                batch_id=batch_id,
+                initial_guess=[0.0] * 3,
+            )
+            _, ha_iters, _, _ = HA(
+                num_spins=num_spins,
+                backend=backend,
+                estimator_options=estimator_options,
+                layers=3,
+                coupling_strength=coupling,
+                field_strength=field,
+                spin_orbit_strength=spin_orbit,
+                batch_id=batch_id,
+            )
+
+            plt.plot(
+                range(1, len(pma_iters) + 1),
+                pma_iters,
+                linestyle="-",
+                color=color,
+                linewidth=1.8,
+                label=f"PMA ($B_z = {field}$ K)",
+            )
+            plt.plot(
+                range(1, len(ha_iters) + 1),
+                ha_iters,
+                linestyle="--",
+                color=color,
+                linewidth=1.8,
+                label=f"HA ($B_z = {field}$ K)",
+            )
+
+        plot_path = os.path.join(plots_dir, f"overlaid_N{num_spins}_PMA_vs_HA.png")
+        plt.xlabel("Iteration (Run #)")
+        plt.xscale("log")
+        plt.ylabel("Energy (K)")
+        plt.title(
+            f"VQE Optimization Overlay (PMA L=1 vs. HA L=3) - N={num_spins}\n"
+            f"J={coupling} K, D_z={spin_orbit:.3f} K"
+        )
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(plot_path)
+        plt.close()
+
+        print(f"Saved overlaid graph to {plot_path}")
 
 
 if __name__ == "__main__":
