@@ -73,7 +73,7 @@ def pma_initial(num_spins, chirality=None):
     if num_spins % 2 == 0:
         raise ValueError("num_spins must be an odd number.")
 
-    a = int((num_spins - 1) // 2)
+    a = int((num_spins + 1) // 2)
     # used for both total up and
     # chirality momentum number calculations
     # locked into a low-B regime with this but can be changed
